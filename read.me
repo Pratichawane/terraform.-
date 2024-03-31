@@ -1,0 +1,93 @@
+open vs code>terminal> check if terraform & aws cli are installed. run command- terraform --version, aws --version.
+powershell-create directory- mkdir cicdtf. run -cd cicdtf. run-code . (it will open vs code automatically).
+
+in vs code- go to folder cicdtf- create nw files in that folder- (provider.tf, main.tf, variables.tf), create new folder again (vpc)- this folder will have all the vpc, subnet, security details files. in vpc folder, create files main.tf, output.tf, variable.tf. 
+create another folder (web)- create 3 files in that-main.tf, output.tf, variable.tf. 
+
+under vpc folder, in main.tf file, write configuration for vpc and subnet and security group.
+now under web folder, in main.tf, write configuration for ec2.
+
+Modules- cicdtf (main.tf) is root module or parent module and web (main.tf) , vpc (main.tf) are child modules.
+Whenevr you want to pass some values from one child module to another child volume, you need to first specify the values as an output in the module that you want to transfer it from, and then call it as variable in the module wherever you want to use it.
+
+now here, in vpc outputs.tf mention details then use these details in web variables.tf.
+run- aws configure
+aws access key- 
+secret access key- /WimhwmPCZV+60eo48o5LLpPfqAZ
+
+run- terraform init, validate, plan, apply. 
+
+now u will see .tf state file has been created. so to store that file securely, go to aws console, create s3 bucket and dynamdb table/ in cicdtf folder create file backened.tf file (write code in that file to upload state file in s3 bucket and lock it by dynamodb)
+
+now go to gitlab and create cicd repository. for that click on create new project> create blank project.
+
+terminal-run command-git init (to initiate reposeritieries), go to browser and search gitignore terraform files (so that you push only necessary things and avoid pushing unnecessary things) so copy code and create new file .gitignore in cicdtf folder & paste that code there. to connect gitlab reposetery here. run- git remote -v. run - git checkout -b dev (to switch to branch dev as we do not push code to main branch initially) . run- git add . (Stage all changes in the current directory and its subdirectories). run- git commit -m "Initial commit" then run- git push -u origin dev. now go to gitlab, you will see new branch dev added and code has been pushed to repo.
+
+you will get an option to create merge request. it is for review, this request will be reviewed by your senior devops engg.
+
+Now need to create cicd pipeline configuration. 
+
+if anybody is making chnsages in infrastructure configuration, cicd will automate to make these chnages. we wont have to manually run those commands.
+
+
+write .gitlab.yml file code in yaml language (to run terraform commands automatically.           
+       
+        
+DO NOT MENTION YOUR AWS ACCESS KEY AND SECRET KEY IN CODE. GIT MAY BAN YOUR ACCOUNT FOR DOING SO.
+
+go to gitlab-pipeline-ci/cd-variables-add variable. so two variables needed to add. one for access key nd one for secret key. 
+
+image:
+    name: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
+    entrypoint:
+        - '/usr/bin/env'
+        - 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+variables:
+    AWS_ACCESS_KEY_ID: ${MY_AWS_ACCESS_KEY}  
+    AWS_SECRET_ACCESS_KEY: ${MY_SECRET_KEY} 
+    AWS_DEFAULT_REGION: "us-east-1"    
+
+
+
+before_script:
+    - terraform --version
+    - terraform init        
+
+stages:
+        - validate
+        - plan
+        - apply
+        - destroy
+validate:
+    stage: validate
+    script:
+        - terraform validate
+
+plan:
+    stage: plan
+    dependencies:
+        - validate
+    script:
+        - terraform plan -out="planfile"
+    artifacts:
+        paths:
+            - planfile    
+
+apply:
+    stage: apply
+    dependencies:
+        - plan
+    script:
+        - terraform apply -input=false "planfile"
+    when: manual    
+
+
+
+destroy:
+    stage: destroy
+    script:
+        - terraform destroy -auto-approve       
+    when: manual       
+
+
